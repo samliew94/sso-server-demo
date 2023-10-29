@@ -5,7 +5,7 @@
 1. client-fe (React)
 2. login-fe (React)
 3. sso-client-1 (_ExpressJS 4 that hosts to host client-fe_)
-4. ssos-erver (_ExpressJS 4 Authorization server that hosts login_fe_)
+4. sso-server (_ExpressJS 4 Authorization server that hosts login_fe_)
 
 When user visits localhost:5555 (_sso-client-1_), redirect to localhost:4444 (_sso-server_) to perform login.  
 Once authenticated, auto redirect back to sso-client-1.  
