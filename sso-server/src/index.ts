@@ -67,7 +67,8 @@ app.post("/verify-sso-token", (req, res, next) => {
     const { ssoToken } = req.body;
     verifyToken(ssoToken);
     return res.json();
-  } catch (error) {
+  } catch (error: any) {
+    console.error(`failed to verify ssoToken. ${error.message}`);
     return next(error);
   }
 });

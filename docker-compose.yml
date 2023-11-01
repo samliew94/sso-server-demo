@@ -1,0 +1,18 @@
+version: "3"
+services:
+  sso-client-1:
+    build: ./sso-client-1
+    ports:
+      - "3000:5555"
+    environment:
+      - AUTH_SERVER=http://sso-server:4444
+  sso-client-2:
+    build: ./sso-client-1
+    ports:
+      - "3001:5555"
+    environment:
+      - AUTH_SERVER=http://sso-server:4444
+  sso-server:
+    build: ./sso-server
+    ports:
+      - "4444:4444"

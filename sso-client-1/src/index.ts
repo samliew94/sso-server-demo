@@ -30,9 +30,20 @@ app.get("/authenticated", async (req: Request, res: Response, next) => {
     verifyToken(accessToken);
     return res.json();
   } catch (error) {
+    console.error("Invalid accessToken. Checking ssoToken");
+    console.log("ssoToken:");
+    console.log(ssoToken);
+
     if (ssoToken) {
       try {
-        await axios.post("http://localhost:4444/verify-sso-token", {
+        console.log("ssoToken found");
+        console.log(`attempting connection to ${process.env.AUTH_SERVER!}`);
+        //http://sso-server:4444
+        const authServerUri: string = process.env.AUTH_SERVER!;
+        console.log(`authServerUri=${authServerUri}`);
+        const finalUri: string = authServerUri + "/verify-sso-token";
+        console.log(`finalUri=${finalUri}`);
+        await axios.post(finalUri, {
           ssoToken,
         });
 
@@ -43,8 +54,15 @@ app.get("/authenticated", async (req: Request, res: Response, next) => {
         });
         return res.json();
       } catch (error: any) {
-        console.error(error.response?.data.message);
+        if (isAxiosError(error)) {
+          console.error("POST request to /verify-sso-token failed...cause:");
+          console.error(error.cause?.message);
+        } else {
+          console.log(`error using decoding ssoToken or signing accessToken`);
+        }
       }
+    } else {
+      console.error("ssoToken not found");
     }
 
     return next(error);
@@ -121,6 +139,6 @@ app.listen(port, () => {
   console.log(`Server 1 running at http://localhost:${port}`);
 });
 
-app.listen(5556, () => {
-  console.log(`Server 2 running at http://localhost:${5556}`);
-});
+// app.listen(5556, () => {
+//   console.log(`Server 2 running at http://localhost:${5556}`);
+// });
