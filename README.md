@@ -7,6 +7,8 @@
 3. sso-client-1 (_ExpressJS 4 that hosts to host client-fe_)
 4. sso-server (_ExpressJS 4 Authorization server that hosts login_fe_)
 
+### Instructions to run program
+
 Execute `npm run start` on `sso-server` and 2 instances of the server app are spawned at `localhost:5555` and `localhost:5556`.  
 When you visit either `5555` or `5556`, you will be redirected to the auth server at `localhost:4444`.  
 After entering username, you will redirected back to the previous origin.  
