@@ -7,31 +7,37 @@ export default function App() {
   const [inputUsername, setInputUsername] = useState("");
   const [loginError, setLoginError] = useState();
   const [changeUsername, setChangeUsername] = useState(false);
-  // const Cookies = require("js-cookie");
 
-  const queryParams = new URLSearchParams(window.location.search);
-  console.log(`queryParams: ${queryParams}`);
+  async function ssoTokenStillValid() {
+    const queryParams = new URLSearchParams(window.location.search);
+    console.log(`queryParams: ${queryParams}`);
 
-  const ssoCallbackUrl = queryParams.get("ssoCallbackUrl");
-  console.log(`ssoCallbackUrl: ${ssoCallbackUrl}`);
+    const redirect_uri = queryParams.get("redirect_uri");
+    console.log(`redirect_uri: ${redirect_uri}`);
+
+    await axios.get("/authenticated");
+
+    if (redirect_uri) window.location.href = `${redirect_uri}`;
+  }
+
+  async function me() {
+    try {
+      const res = await axios.get("/me");
+      const { username } = res.data;
+      setLoggedInUsername(username);
+    } catch (error) {
+      if (isAxiosError(error)) {
+        const resError: any = error.response;
+        setLoginError(resError.data.message);
+      }
+    }
+  }
 
   useEffect(() => {
-    setLoggedInUsername("");
-
-    const me = async () => {
-      try {
-        const res = await axios.get("/me");
-        const { username } = res.data;
-        setLoggedInUsername(username);
-      } catch (error) {
-        if (isAxiosError(error)) {
-          const resError: any = error.response;
-          setLoginError(resError.data.message);
-        }
-      }
-    };
-
-    me();
+    try {
+      ssoTokenStillValid();
+      me();
+    } catch (error) {}
   }, []);
 
   const onUsernameChange = (event: any) => {
@@ -39,37 +45,36 @@ export default function App() {
   };
 
   const onLogin = async () => {
+    const queryParams = new URLSearchParams(window.location.search);
+    console.log(`queryParams: ${queryParams}`);
+
+    const redirect_uri = queryParams.get("redirect_uri");
+    console.log(`redirect_uri: ${redirect_uri}`);
+
     if (!inputUsername || inputUsername.trim().length === 0) return;
 
     try {
-      console.log(`sending queryParams: ${queryParams}`);
-
-      const res = await axios.post(`/authenticate`, {
+      await axios.post(`/authenticate`, {
         username: inputUsername,
+        redirect_uri,
       });
 
-      const { username, ssoToken } = res.data;
-
-      if (ssoCallbackUrl) {
-        window.location.href = `${ssoCallbackUrl}?ssoToken=${ssoToken}`;
+      if (redirect_uri) {
+        window.location.href = `${redirect_uri}`;
         return;
       }
 
-      setLoggedInUsername(username);
+      me();
       setChangeUsername(false);
     } catch (error: any) {
-      setLoginError(error.message);
+      setLoginError(error.data?.response.message);
     }
-  };
-
-  const onSignOut = async () => {
-    await axios.post("/unauthenticate", {});
   };
 
   return (
     <>
       <div className="flex flex-col justify-center items-center h-screen gap-2">
-        <div className="text-4xl">SSO Server Login</div>
+        <div className="text-4xl">SSO Login</div>
         {loggedInUsername && !changeUsername ? (
           <>
             <div className="text-2xl">
@@ -85,7 +90,7 @@ export default function App() {
                 Change Username
               </button>
               <button
-                onClick={onSignOut}
+                onClick={() => {}}
                 className="text-lg rounded-md px-4 py-2 bg-blue-500 active:bg-blue-800 text-white"
               >
                 Continue

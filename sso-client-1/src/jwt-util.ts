@@ -1,10 +1,8 @@
-import { CustomError } from "./custom-error";
-
 var jwt = require("jsonwebtoken");
 require("dotenv").config();
 
 export function signClientToken(payload: any) {
-  const token = jwt.sign(payload, process.env.CLIENT_SECRET!);
+  const token = jwt.sign(payload, process.env.JWT_SECRET!);
   return token;
 }
 
@@ -12,11 +10,7 @@ export function signClientToken(payload: any) {
  * either returns {error} or decoded jwt
  */
 export function verifyClientToken(payload: string) {
-  try {
-    return jwt.verify(payload, process.env.CLIENT_SECRET!);
-  } catch (error: any) {
-    throw new CustomError(401, error.message);
-  }
+  return jwt.verify(payload, process.env.JWT_SECRET!);
 }
 
 export function decodeJwt(token: any) {

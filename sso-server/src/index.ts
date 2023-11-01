@@ -1,11 +1,13 @@
-import { isAxiosError } from "axios";
 import express, { NextFunction, Request, Response } from "express";
-import { signSsoToken, verifySsoToken } from "./jwt-util";
+import { findByAuthCode } from "./auth-data";
+import { CustomError } from "./custom-error";
+import { signToken, verifyToken } from "./jwt-util";
 
 const app = express();
 const port = process.env.PORT || 4444;
 
 const path = require("path");
+const fs = require("fs");
 const cookieParser = require("cookie-parser");
 require("dotenv").config();
 
@@ -13,97 +15,115 @@ app.use(express.json());
 app.use(cookieParser());
 
 app.get("/", (req: Request, res: Response, next: NextFunction) => {
-  console.log(`req cookies:`);
-  console.log(req.cookies);
-
-  console.log("api '/' called");
-
-  // const { ssoCallbackUrl } = req.query;
-  // console.log(`ssoCallbackUrl: ${ssoCallbackUrl}`);
-
-  // const { ssoToken } = req.cookies;
-  // console.log(`ssoToken: ${ssoToken}`);
-
-  // if (ssoToken) {
-  //   try {
-  //     const decoded = verifySsoToken(ssoToken);
-  //     const username = decoded.username;
-  //     console.log(`username: ${username}`);
-  //   } catch (error: any) {
-  //     console.error(error.message);
-  //     res.clearCookie("ssoToken");
-  //   }
-  // }
-
   res.sendFile(path.join(__dirname, "../public/index.html"));
 });
 
-app.post("/authenticate", (req, res) => {
-  const origin = req.get("Origin");
-
-  const { username, ssoCallbackUrl } = req.body;
-
-  if (!username) throw new Error("Invalid username");
-
-  const ssoToken = signSsoToken({ username });
-
-  // set ssoToken cookie in authServer
-  res.cookie("ssoToken", ssoToken, { httpOnly: true });
-
-  console.log(`authenticated: ${username}`);
-
-  res.json({ username, ssoToken });
-});
-
-app.get("/verify", (req, res) => {
-  const { ssoToken } = req.query;
-
-  if (!ssoToken || typeof ssoToken !== "string")
-    throw new Error("Invalid ssoToken");
-
+app.get("/authenticated", (req, res, next) => {
   try {
-    verifySsoToken(ssoToken);
-    res.json();
-  } catch (error: any) {
-    console.error(error.message);
-    throw error;
-  }
-});
+    // how about just send client_id and client_secret?
+    const { ssoToken } = req.cookies; // ssoToken cannot be access from remote API call, so what I still have to return an auth code?
+    verifyToken(ssoToken);
 
-app.get("/crazy", (req, res) => {
-  const ck = req.cookies;
-  console.log(`a foo`);
+    return res.json();
+
+    // if the ssoToken is still valid, we simply redirect user back with code
+  } catch (error: any) {
+    return next(error);
+  }
 });
 
 app.get("/me", (req, res) => {
   const { ssoToken } = req.cookies;
 
-  if (!ssoToken) {
-    return res.json();
-  }
+  if (!ssoToken) return res.json();
 
-  const decoded = verifySsoToken(ssoToken);
+  let decoded: any;
+
+  try {
+    decoded = verifyToken(ssoToken);
+  } catch (error) {
+    res.clearCookie("ssoToken");
+    throw error;
+  }
 
   const { username } = decoded;
 
-  res.json({ username });
+  return res.json({ username });
+});
+
+app.post("/authenticate", (req, res) => {
+  const { username } = req.body;
+
+  console.log(`authenticated ${username}`);
+
+  const ssoToken = signToken({ username });
+  res.cookie("ssoToken", ssoToken, { httpOnly: true }); // user is fully authenticated
+
+  return res.json();
+});
+
+app.post("/verify-sso-token", (req, res, next) => {
+  try {
+    const { ssoToken } = req.body;
+    verifyToken(ssoToken);
+    return res.json();
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.post("/verify-auth-code", async (req, res, next) => {
+  try {
+    const { client_id, client_secret, code } = req.body;
+
+    const authData = findByAuthCode(code);
+
+    const readFile = fs.readFileSync(
+      path.join(__dirname, "../public/client-data.json"),
+      "utf8"
+    );
+
+    const json = JSON.parse(readFile);
+
+    if (!client_id || !client_secret)
+      return next(
+        new CustomError(401, "client_id or client_secret is undefined")
+      );
+
+    if (!json.hasOwnProperty(client_id))
+      return next(new CustomError(401, "client_id not found"));
+
+    if (json[client_id] !== client_secret)
+      return next(new CustomError(401, "client_secret do not match"));
+
+    const ssoToken = authData.ssoToken;
+    return res.json({ ssoToken });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get("/gen-client-secret", (req, res) => {
+  const characters =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_+=<>?";
+  let secretString = "";
+
+  for (let i = 0; i < 24; i++) {
+    const randomIndex = Math.floor(Math.random() * characters.length);
+    secretString += characters[randomIndex];
+  }
+
+  return res.send(secretString);
 });
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   if (err) {
-    if (isAxiosError(err)) {
-      const errRes: any = err.response;
-
-      res.status(400).json({ message: errRes.message });
+    if (err instanceof CustomError) {
+      console.error(`${err.status} ${err.message}`);
+      return res.status(err.status).json({ message: err.message });
     } else {
-      if (err.name === "TokenExpiredError") {
-        res.clearCookie("ssoToken");
-      }
-
-      console.error(err.message);
-      res.status(400).json({
-        message: err.message,
-      });
+      console.error(`${err.message}`);
+      return res.status(500).json({ message: err.message });
     }
   }
 });
